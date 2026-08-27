@@ -60,6 +60,7 @@ export default function ControleContratosPage() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -616,7 +617,7 @@ export default function ControleContratosPage() {
       <div className="login-screen">
         <form className="login-card" onSubmit={handleLogin}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="login-logo" src={COMPANY_HEADER_LOGOS.agrobiotech} alt="Agrobiotech" />
+          <img className="login-logo" src={COMPANY_ICONS.agrobiotech} alt="Agrobiotech" />
           <h1>Controle de Contratos</h1>
           <p className="login-subtitle">Entre com seu e-mail e senha para acessar.</p>
           <label htmlFor="login-email">E-mail</label>
@@ -630,15 +631,26 @@ export default function ControleContratosPage() {
             onChange={(ev) => setLoginEmail(ev.target.value)}
           />
           <label htmlFor="login-password">Senha</label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={loginPassword}
-            onChange={(ev) => setLoginPassword(ev.target.value)}
-          />
+          <div className="login-password-wrap">
+            <input
+              id="login-password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={loginPassword}
+              onChange={(ev) => setLoginPassword(ev.target.value)}
+            />
+            <button
+              type="button"
+              className="login-toggle-pass"
+              tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
+              title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showPassword ? '🙈' : '👁'}
+            </button>
+          </div>
           {loginError && <div className="login-error">{loginError}</div>}
           <button type="submit" disabled={loginBusy}>
             {loginBusy ? 'Entrando...' : 'Entrar'}
