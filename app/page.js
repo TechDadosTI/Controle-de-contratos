@@ -51,6 +51,50 @@ export default function ControleContratosPage() {
   const [supabaseOnline, setSupabaseOnline] = useState(false);
   const [syncStatus, setSyncStatus] = useState(''); // '', 'saving', 'saved', 'error', 'offline'
 
+  // ---------- Login ----------
+  // session === undefined: ainda verificando se já existe sessão salva (localStorage).
+  // session === null: ninguém logado -> mostra tela de login.
+  // session === {...}: usuário autenticado -> mostra o sistema.
+  const [session, setSession] = useState(undefined);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) setSession(data.session);
+    });
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogin(ev) {
+    ev.preventDefault();
+    setLoginError('');
+    setLoginBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail.trim(),
+      password: loginPassword,
+    });
+    setLoginBusy(false);
+    if (error) {
+      setLoginError('E-mail ou senha inválidos.');
+      return;
+    }
+    setLoginPassword('');
+  }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+  }
+
   const [activeCard, setActiveCard] = useState('');
   const [search, setSearch] = useState('');
   const [fStatus, setFStatus] = useState('');
@@ -82,6 +126,7 @@ export default function ControleContratosPage() {
   // ar), caímos no snapshot embutido (modo leitura, com aviso na tela) pra pessoa nunca ver a
   // tela em branco - mas nesse modo nada que ela fizer é salvo de verdade.
   useEffect(() => {
+    if (!session) return;
     let cancelled = false;
     async function initData() {
       try {
@@ -117,7 +162,7 @@ export default function ControleContratosPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [session]);
 
   // ---------- Fechar o menu "Trocar de empresa" ao clicar fora ----------
   // Nota: no Next.js o React delega os eventos a partir do próprio `document` (diferente do
@@ -555,6 +600,52 @@ export default function ControleContratosPage() {
     return 'status-' + (String(c.status).trim() || 'Ativo').replace(/[^A-Za-zÀ-ú]/g, '');
   }
 
+  if (session === undefined) {
+    return (
+      <div className="loading-overlay" style={{ position: 'static', minHeight: '100vh' }}>
+        <div className="loading-box">
+          <div className="loading-spinner"></div>
+          <div>Carregando...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="login-screen">
+        <form className="login-card" onSubmit={handleLogin}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="login-logo" src={COMPANY_HEADER_LOGOS.agrobiotech} alt="Agrobiotech" />
+          <h1>Controle de Contratos</h1>
+          <p className="login-subtitle">Entre com seu e-mail e senha para acessar.</p>
+          <label htmlFor="login-email">E-mail</label>
+          <input
+            id="login-email"
+            type="email"
+            autoComplete="username"
+            required
+            value={loginEmail}
+            onChange={(ev) => setLoginEmail(ev.target.value)}
+          />
+          <label htmlFor="login-password">Senha</label>
+          <input
+            id="login-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={loginPassword}
+            onChange={(ev) => setLoginPassword(ev.target.value)}
+          />
+          {loginError && <div className="login-error">{loginError}</div>}
+          <button type="submit" disabled={loginBusy}>
+            {loginBusy ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div style={rootVars}>
       {loading && (
@@ -610,6 +701,9 @@ export default function ControleContratosPage() {
         </div>
         <p className="tagline">Controle de Contratos</p>
         <p className="company-badge">{COMPANIES[activeCompany].label}</p>
+        <button type="button" className="logout-btn" title="Sair do sistema" onClick={handleLogout}>
+          Sair
+        </button>
         {syncStatus === 'saving' || syncStatus === 'error' || syncStatus === 'offline' ? (
           <span
             className={
