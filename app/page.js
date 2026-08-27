@@ -622,6 +622,7 @@ export default function ControleContratosPage() {
           <label htmlFor="login-email">E-mail</label>
           <input
             id="login-email"
+            name="email"
             type="email"
             autoComplete="username"
             required
@@ -631,6 +632,7 @@ export default function ControleContratosPage() {
           <label htmlFor="login-password">Senha</label>
           <input
             id="login-password"
+            name="password"
             type="password"
             autoComplete="current-password"
             required
