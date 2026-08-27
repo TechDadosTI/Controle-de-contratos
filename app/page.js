@@ -76,6 +76,30 @@ export default function ControleContratosPage() {
     };
   }, []);
 
+  // ---------- Papel do usuário: 'editor' (pode tudo) ou 'viewer' (só vê e exporta) ----------
+  const [userRole, setUserRole] = useState(null);
+  useEffect(() => {
+    if (!session) {
+      setUserRole(null);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        // Se não achar o perfil por algum motivo, assume viewer (mais seguro que liberar edição).
+        setUserRole(error ? 'viewer' : data?.role || 'viewer');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+  const isEditor = userRole === 'editor';
+
   async function handleLogin(ev) {
     ev.preventDefault();
     setLoginError('');
@@ -809,23 +833,27 @@ export default function ControleContratosPage() {
           >
             Exportar (.xlsx)
           </button>
-          <button
-            className="secondary"
-            title="Substitui os contratos desta empresa pelos de um arquivo .xlsx/.csv salvo antes"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Importar
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            id="fileImport"
-            accept=".xlsx,.xls,.csv"
-            onChange={handleImportFile}
-          />
-          <button title="Cadastrar um contrato novo" onClick={openNew}>
-            + Novo Contrato
-          </button>
+          {isEditor && (
+            <>
+              <button
+                className="secondary"
+                title="Substitui os contratos desta empresa pelos de um arquivo .xlsx/.csv salvo antes"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Importar
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                id="fileImport"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportFile}
+              />
+              <button title="Cadastrar um contrato novo" onClick={openNew}>
+                + Novo Contrato
+              </button>
+            </>
+          )}
         </div>
 
         <div className="tablewrap">
@@ -849,7 +877,7 @@ export default function ControleContratosPage() {
                 <th title="Aviso automático sobre o vencimento deste contrato. Cores: Verde = tudo certo · Amarelo = vence em breve · Laranja = avisar rescisão · Vermelho = já venceu · Cinza = encerrado ou sem data">
                   Alerta
                 </th>
-                <th title="Botões para corrigir ou remover este contrato">Ações</th>
+                {isEditor && <th title="Botões para corrigir ou remover este contrato">Ações</th>}
               </tr>
             </thead>
             <tbody>
@@ -887,14 +915,16 @@ export default function ControleContratosPage() {
                     <td>
                       <span className={'pill ' + a.code}>{a.label}</span>
                     </td>
-                    <td className="actions-cell">
-                      <button className="rowbtn" onClick={() => openEdit(c.id)}>
-                        Editar
-                      </button>
-                      <button className="rowbtn del" onClick={() => askDelete(c.id)}>
-                        Excluir
-                      </button>
-                    </td>
+                    {isEditor && (
+                      <td className="actions-cell">
+                        <button className="rowbtn" onClick={() => openEdit(c.id)}>
+                          Editar
+                        </button>
+                        <button className="rowbtn del" onClick={() => askDelete(c.id)}>
+                          Excluir
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
