@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# claude code (arquivos internos da ferramenta, não fazem parte do app)
+.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
