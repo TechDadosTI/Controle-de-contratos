@@ -1075,7 +1075,11 @@ export default function ControleContratosPage() {
             </div>
             <div>
               <label>Status</label>
-              <select value={formData.status || 'Ativo'} onChange={(e) => setField('status', e.target.value)}>
+              <select value={formData.status || ''} onChange={(e) => setField('status', e.target.value)}>
+                {formData.status && !['Ativo', 'Inativo', 'Encerrado'].includes(formData.status) && (
+                  <option value={formData.status}>{formData.status} (valor não padrão — escolha um abaixo)</option>
+                )}
+                {!formData.status && <option value="">Selecione...</option>}
                 <option>Ativo</option>
                 <option>Inativo</option>
                 <option>Encerrado</option>
@@ -1083,7 +1087,11 @@ export default function ControleContratosPage() {
             </div>
             <div>
               <label>Assinado</label>
-              <select value={formData.assinado || 'Sim'} onChange={(e) => setField('assinado', e.target.value)}>
+              <select value={formData.assinado || ''} onChange={(e) => setField('assinado', e.target.value)}>
+                {formData.assinado && !['Sim', 'Não'].includes(formData.assinado) && (
+                  <option value={formData.assinado}>{formData.assinado} (valor não padrão — escolha um abaixo)</option>
+                )}
+                {!formData.assinado && <option value="">Selecione...</option>}
                 <option>Sim</option>
                 <option>Não</option>
               </select>
