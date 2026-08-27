@@ -631,26 +631,23 @@ export default function ControleContratosPage() {
             onChange={(ev) => setLoginEmail(ev.target.value)}
           />
           <label htmlFor="login-password">Senha</label>
-          <div className="login-password-wrap">
+          <input
+            id="login-password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            required
+            value={loginPassword}
+            onChange={(ev) => setLoginPassword(ev.target.value)}
+          />
+          <label className="login-show-pass">
             <input
-              id="login-password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              required
-              value={loginPassword}
-              onChange={(ev) => setLoginPassword(ev.target.value)}
+              type="checkbox"
+              checked={showPassword}
+              onChange={(ev) => setShowPassword(ev.target.checked)}
             />
-            <button
-              type="button"
-              className="login-toggle-pass"
-              tabIndex={-1}
-              onClick={() => setShowPassword((v) => !v)}
-              title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-            >
-              {showPassword ? '🙈' : '👁'}
-            </button>
-          </div>
+            Mostrar senha
+          </label>
           {loginError && <div className="login-error">{loginError}</div>}
           <button type="submit" disabled={loginBusy}>
             {loginBusy ? 'Entrando...' : 'Entrar'}
