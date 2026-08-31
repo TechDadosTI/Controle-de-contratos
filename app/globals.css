@@ -246,3 +246,97 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
   background:#FDECEA;border-bottom:1px solid #F5C6CB;color:#7A1F1F;
   padding:10px 20px;font-size:13px;text-align:center;
 }
+
+/* ==================== Responsivo: tablet e celular ==================== */
+
+/* Tablet (portrait/landscape até 1024px): ajustes de espaçamento e grid */
+@media (max-width:1024px){
+  .wrap{padding:16px 16px 50px;}
+  .cards{grid-template-columns:repeat(3,1fr);}
+  .toolbar input[type=text]{flex:1 1 100%;min-width:0;}
+  .toolbar select{flex:1 1 auto;min-width:150px;}
+  .toolbar button{flex:0 0 auto;}
+  .spacer{flex-basis:100%;height:0;}
+  .modal{width:560px;}
+}
+
+/* A partir daqui a tabela vira uma lista de cartões — 13 colunas não cabem
+   em tela de tablet retrato/celular, e rolagem horizontal fica ruim de usar
+   com o dedo. Cada linha vira um cartão "rótulo: valor" via data-label. */
+@media (max-width:860px){
+  .tablewrap{overflow:visible;max-height:none;border:none;background:transparent;}
+  table{display:block;width:100%;background:transparent;border-radius:0;}
+  thead{display:none;}
+  tbody{display:block;}
+  tbody tr{
+    display:block;background:#fff;border:1px solid var(--border);border-radius:10px;
+    padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(20,30,25,.06);
+  }
+  tbody td{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+    text-align:right;padding:8px 0;border-bottom:1px solid var(--border);white-space:normal;
+  }
+  tbody td:last-child{border-bottom:none;}
+  tbody td::before{
+    content:attr(data-label);flex:none;max-width:46%;text-align:left;
+    font-size:10.5px;font-weight:bold;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);
+  }
+  /* Empresa Contratada vira o "título" do cartão, sem rótulo */
+  tbody td:first-child{
+    display:block;text-align:left;padding:0 0 10px;margin-bottom:8px;
+    border-bottom:2px solid var(--accent-tint, var(--mint));font-size:15px;
+  }
+  tbody td:first-child::before{content:none;}
+  tbody td:first-child b{font-size:15px;}
+  tbody td.actions-cell{
+    display:flex;justify-content:flex-end;gap:8px;border-bottom:none;padding-top:12px;
+  }
+  tbody td.actions-cell::before{content:none;}
+  tbody td.actions-cell .rowbtn{flex:1;text-align:center;padding:10px 8px;margin-right:0;}
+}
+
+/* Celular */
+@media (max-width:640px){
+  body{font-size:14px;}
+  header{padding:14px 10px 12px;}
+  header p.tagline{font-size:10.5px;}
+  header p.company-badge{font-size:11px;padding:3px 10px;margin-top:6px;}
+  header img.logo{height:auto;max-height:calc(var(--logo-height, 56px) * 0.62);max-width:58%;width:auto;margin:0 auto;}
+  .company-menu-btn, .header-help-btn{width:36px;height:36px;font-size:16px;top:10px;}
+  .company-menu-btn{left:10px;}
+  .header-help-btn{right:10px;}
+  .logout-btn{top:10px;right:52px;height:36px;font-size:11px;padding:0 10px;}
+  .company-menu{left:10px;top:54px;min-width:0;width:calc(100vw - 20px);}
+  .sync-status{display:block;margin:8px auto 0;width:fit-content;}
+
+  .wrap{padding:12px 10px 40px;}
+  .note{font-size:11.5px;padding:9px 12px;}
+
+  .cards{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px;}
+  .card{padding:10px 12px;}
+  .card .n{font-size:17px;overflow-wrap:break-word;}
+  .card .l{font-size:9.5px;}
+
+  .toolbar{gap:8px;}
+  .toolbar select, .toolbar button{flex:1 1 100%;}
+  .toolbar input[type=text], .toolbar select, .toolbar button{padding:11px 12px;}
+
+  footer{padding:14px 10px;}
+
+  .modal-bg{padding:0;}
+  .modal{
+    width:100%;max-width:100vw;height:100%;max-height:100vh;border-radius:0;
+    padding:18px 16px 90px;
+  }
+  .form-grid{grid-template-columns:1fr;gap:12px;}
+  .form-grid input, .form-grid select, .form-grid textarea{padding:11px 10px;font-size:15px;}
+  .modal-actions{
+    position:fixed;left:0;right:0;bottom:0;background:#fff;margin:0;
+    padding:12px 16px;border-top:1px solid var(--border);flex-direction:column-reverse;gap:8px;
+  }
+  .modal-actions button{width:100%;padding:13px;}
+  .confirm-modal .modal, .help-modal .modal{height:auto;max-height:88vh;padding:20px 18px;}
+  .confirm-modal .modal-actions, .help-modal .modal-actions{position:static;border-top:none;padding:0;margin-top:18px;}
+
+  .login-card{padding:26px 22px;}
+}

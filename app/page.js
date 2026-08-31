@@ -885,15 +885,15 @@ export default function ControleContratosPage() {
                 const a = computeAlert(c);
                 return (
                   <tr key={c.id}>
-                    <td>
+                    <td data-label="Empresa Contratada">
                       <b>{c.empresaContratada}</b>
                       {c.empresaContratante && (
                         <div style={{ color: 'var(--muted)', fontSize: 11 }}>{c.empresaContratante}</div>
                       )}
                     </td>
-                    <td>{c.centroCusto}</td>
-                    <td>{c.responsavel}</td>
-                    <td>
+                    <td data-label="Centro de Custo">{c.centroCusto}</td>
+                    <td data-label="Responsável">{c.responsavel}</td>
+                    <td data-label="Objeto do Contrato">
                       {c.objeto}
                       {c.objetoDetalhe && (
                         <div style={{ color: 'var(--muted)', fontSize: 11 }} title={c.objetoDetalhe}>
@@ -902,17 +902,17 @@ export default function ControleContratosPage() {
                         </div>
                       )}
                     </td>
-                    <td>{fmtValor(c.valor)}</td>
-                    <td>{fmtDate(c.dataTermino)}</td>
-                    <td>{c.prazoVigencia || '—'}</td>
-                    <td>{c.pagamento || '—'}</td>
-                    <td>{c.prazoAviso || '—'}</td>
-                    <td>
+                    <td data-label="Valor">{fmtValor(c.valor)}</td>
+                    <td data-label="Data de Término">{fmtDate(c.dataTermino)}</td>
+                    <td data-label="Prazo de Vigência">{c.prazoVigencia || '—'}</td>
+                    <td data-label="Pagamento">{c.pagamento || '—'}</td>
+                    <td data-label="Aviso de Rescisão">{c.prazoAviso || '—'}</td>
+                    <td data-label="Status">
                       <span className={'pill ' + statusClassOf(c)}>{c.status || '—'}</span>
                     </td>
-                    <td>{c.assinado || '—'}</td>
-                    <td>{c.origem}</td>
-                    <td>
+                    <td data-label="Assinado">{c.assinado || '—'}</td>
+                    <td data-label="Categoria">{c.origem}</td>
+                    <td data-label="Alerta">
                       <span className={'pill ' + a.code}>{a.label}</span>
                     </td>
                     {isEditor && (
