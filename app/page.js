@@ -38,14 +38,11 @@ const EMPTY_FORM = FIELDS.reduce((acc, f) => {
 }, {});
 
 export default function ControleContratosPage() {
-  // ---------- Dados: por empresa, com fallback embutido pra quando o Supabase falhar ----------
-  const [companyStore, setCompanyStore] = useState(() => {
-    const store = {};
-    COMPANY_ORDER.forEach((k) => {
-      store[k] = JSON.parse(JSON.stringify(COMPANIES[k].data));
-    });
-    return store;
-  });
+  // ---------- Dados: por empresa. Começa vazio de propósito - só é preenchido depois de login
+  // válido e leitura bem-sucedida do Supabase (ver initData()). Não existe mais fallback local
+  // com contratos reais: se o Supabase falhar, mostramos uma tela de indisponibilidade em vez de
+  // dados desatualizados/embutidos no bundle.
+  const [companyStore, setCompanyStore] = useState({});
   const [activeCompany, setActiveCompany] = useState('agrobiotech');
   const [loading, setLoading] = useState(true);
   const [supabaseOnline, setSupabaseOnline] = useState(false);
@@ -118,6 +115,17 @@ export default function ControleContratosPage() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    // Limpa os contratos da tela/memória ao sair, em vez de deixá-los na interface até o
+    // próximo carregamento (defesa em profundidade - a tela de login já cobre a UI principal).
+    setCompanyStore({});
+    setActiveCard('');
+    setSearch('');
+    setFStatus('');
+    setFAlerta('');
+    setFResp('');
+    setSupabaseOnline(false);
+    setSyncStatus('');
+    setLoading(true);
   }
 
   const [activeCard, setActiveCard] = useState('');
@@ -146,10 +154,10 @@ export default function ControleContratosPage() {
     [companyStore, activeCompany]
   );
 
-  // ---------- Carregamento inicial: Supabase, com fallback pros dados embutidos ----------
-  // Se a leitura falhar (sem internet, tabela ainda não criada, chave errada, Supabase fora do
-  // ar), caímos no snapshot embutido (modo leitura, com aviso na tela) pra pessoa nunca ver a
-  // tela em branco - mas nesse modo nada que ela fizer é salvo de verdade.
+  // ---------- Carregamento inicial: só depois de sessão válida, direto do Supabase ----------
+  // Se a leitura falhar (sem internet, banco fora do ar, chave errada), NÃO existe mais fallback
+  // com dados embutidos: mostramos uma tela de indisponibilidade (ver renderização mais abaixo)
+  // e nenhum contrato/ação fica visível até uma nova tentativa funcionar.
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
@@ -172,11 +180,9 @@ export default function ControleContratosPage() {
         setSupabaseOnline(true);
         setSyncStatus('saved');
       } catch (err) {
-        console.error(
-          'Não foi possível carregar do Supabase, usando os dados salvos neste arquivo:',
-          err
-        );
+        console.error('Não foi possível carregar os contratos do Supabase:', err);
         if (cancelled) return;
+        setCompanyStore({});
         setSupabaseOnline(false);
         setSyncStatus('offline');
       } finally {
@@ -547,39 +553,38 @@ export default function ControleContratosPage() {
           );
           return;
         }
-        const companyLabel = COMPANIES[activeCompany].label;
-        if (supabaseOnline) {
-          const ok = confirm(
-            `Isso vai APAGAR os ${contracts.length} contrato(s) atuais de "${companyLabel}" no banco de dados e substituir pelos ${imported.length} contrato(s) deste arquivo. Essa ação não pode ser desfeita. Deseja continuar?`
-          );
-          if (!ok) return;
+        if (!supabaseOnline) {
+          alert('Sem conexão com o banco de dados agora - não é possível importar.');
+          return;
         }
-        if (supabaseOnline) setSyncStatus('saving');
+        const companyLabel = COMPANIES[activeCompany].label;
+        const ok = confirm(
+          `Isso vai SUBSTITUIR os ${contracts.length} contrato(s) atuais de "${companyLabel}" pelos ${imported.length} contrato(s) deste arquivo. Essa ação não pode ser desfeita. Deseja continuar?`
+        );
+        if (!ok) return;
+        setSyncStatus('saving');
         try {
-          if (supabaseOnline) {
-            const { error: delError } = await supabase
-              .from('contracts')
-              .delete()
-              .eq('company', activeCompany);
-            if (delError) throw delError;
-            const rowsToInsert = imported.map((c) => dataToRow(c, activeCompany));
-            const { data: insertedRows, error: insError } = await supabase
-              .from('contracts')
-              .insert(rowsToInsert)
-              .select();
-            if (insError) throw insError;
-            const sorted = insertedRows.map(rowToContract).sort((a, b) => a.id - b.id);
-            setCompanyStore((prev) => ({ ...prev, [activeCompany]: sorted }));
-          } else {
-            setCompanyStore((prev) => ({ ...prev, [activeCompany]: imported }));
-          }
-          if (supabaseOnline) setSyncStatus('saved');
+          // import_contracts() apaga e insere dentro de UMA transação no banco (ver
+          // supabase/migrations/0002_atomic_import.sql): se o insert falhar por qualquer
+          // motivo, o delete também é desfeito e os contratos antigos continuam intactos -
+          // diferente de fazer delete()+insert() como duas chamadas separadas daqui.
+          const { data: insertedRows, error: importError } = await supabase.rpc(
+            'import_contracts',
+            {
+              p_company: activeCompany,
+              p_rows: imported.map((c) => dataToRow(c, activeCompany)),
+            }
+          );
+          if (importError) throw importError;
+          const sorted = insertedRows.map(rowToContract).sort((a, b) => a.id - b.id);
+          setCompanyStore((prev) => ({ ...prev, [activeCompany]: sorted }));
+          setSyncStatus('saved');
           alert(`${imported.length} contratos importados em "${companyLabel}" com sucesso.`);
         } catch (syncErr) {
           console.error(syncErr);
-          if (supabaseOnline) setSyncStatus('error');
+          setSyncStatus('error');
           alert(
-            'Não foi possível importar para o banco de dados agora. Verifique sua internet e tente novamente.\n\nDetalhe técnico: ' +
+            'Não foi possível importar para o banco de dados agora - os contratos anteriores continuam salvos, nada foi perdido. Verifique sua internet e tente novamente.\n\nDetalhe técnico: ' +
               (syncErr.message || syncErr)
           );
         }
@@ -751,14 +756,22 @@ export default function ControleContratosPage() {
         ) : null}
       </header>
 
-      {!supabaseOnline && !loading && (
-        <div className="offline-banner">
-          Não foi possível conectar ao banco de dados agora. Você está vendo os últimos dados salvos, mas{' '}
-          <b>alterações feitas agora não serão guardadas</b> — verifique sua internet e recarregue a página antes
-          de cadastrar, editar ou excluir algo.
+      {!loading && !supabaseOnline ? (
+        <div className="wrap">
+          <div className="unavailable-state">
+            <div className="unavailable-icon" aria-hidden="true">!</div>
+            <h2>Não foi possível carregar os contratos agora</h2>
+            <p>
+              Não conseguimos falar com o banco de dados. Isso pode ser sua internet ou uma instabilidade
+              temporária no serviço. Por segurança, <b>nenhum contrato é mostrado neste estado</b> — nada foi
+              perdido, os dados continuam salvos normalmente no banco.
+            </p>
+            <button type="button" onClick={() => window.location.reload()}>
+              Tentar novamente
+            </button>
+          </div>
         </div>
-      )}
-
+      ) : (
       <div className="wrap">
         <div className="note">
           <b>Salvamento automático:</b> tudo que você cadastrar, editar ou excluir aqui é salvo automaticamente na
@@ -943,6 +956,7 @@ export default function ControleContratosPage() {
           topo para trocar de empresa.
         </footer>
       </div>
+      )}
 
       {/* Modal: Novo/Editar Contrato */}
       <div
