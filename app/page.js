@@ -137,6 +137,25 @@ export default function ControleContratosPage() {
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
   const companyMenuRef = useRef(null);
 
+  // ---------- Barra lateral de empresas (só no computador; no celular/tablet continua o ☰) ----------
+  // O valor salvo é lido dentro do useEffect, não durante o render: no primeiro render o
+  // servidor não tem localStorage, e ler ali causaria erro de hidratação.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(localStorage.getItem('cc-sidebar-collapsed') === '1');
+    } catch {}
+  }, []);
+  function toggleSidebar() {
+    setSidebarCollapsed((v) => {
+      const nv = !v;
+      try {
+        localStorage.setItem('cc-sidebar-collapsed', nv ? '1' : '0');
+      } catch {}
+      return nv;
+    });
+  }
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -756,6 +775,39 @@ export default function ControleContratosPage() {
         ) : null}
       </header>
 
+      <div className="app-shell">
+        <aside className={'company-sidebar' + (sidebarCollapsed ? ' collapsed' : '')}>
+          <div className="cs-toggle-row">
+            <button
+              type="button"
+              className="cs-toggle"
+              onClick={toggleSidebar}
+              title={sidebarCollapsed ? 'Expandir' : 'Minimizar'}
+              aria-label={sidebarCollapsed ? 'Expandir barra de empresas' : 'Minimizar barra de empresas'}
+            >
+              {sidebarCollapsed ? '»' : '«'}
+            </button>
+          </div>
+          <div className="cs-list">
+            {COMPANY_ORDER.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className={k === activeCompany ? 'active' : ''}
+                onClick={() => switchCompany(k)}
+                title={COMPANIES[k].label}
+              >
+                <span className="cs-avatar">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={COMPANY_ICONS[k]} alt={COMPANIES[k].label} />
+                </span>
+                <span className="cs-name">{COMPANIES[k].label}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+        <div className="app-content">
+
       {!loading && !supabaseOnline ? (
         <div className="wrap">
           <div className="unavailable-state">
@@ -957,6 +1009,9 @@ export default function ControleContratosPage() {
         </footer>
       </div>
       )}
+
+        </div>
+      </div>
 
       {/* Modal: Novo/Editar Contrato */}
       <div
