@@ -53,11 +53,8 @@ export default function ControleContratosPage() {
   // session === null: ninguém logado -> mostra tela de login.
   // session === {...}: usuário autenticado -> mostra o sistema.
   const [session, setSession] = useState(undefined);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginBusy, setLoginBusy] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -74,43 +71,50 @@ export default function ControleContratosPage() {
   }, []);
 
   // ---------- Papel do usuário: 'editor' (pode tudo) ou 'viewer' (só vê e exporta) ----------
+  // A função public.ensure_profile() no Supabase devolve 'editor', 'viewer' ou nulo (pessoa sem
+  // acesso liberado). Quem não está liberado NÃO pode virar viewer por padrão: com o login pela
+  // conta Microsoft, qualquer pessoa da empresa consegue autenticar, então assumir viewer em caso
+  // de erro/nulo liberaria a leitura dos contratos pra todo mundo. Nesses casos accessState fica
+  // 'denied' e a pessoa vê a tela de "acesso não liberado".
   const [userRole, setUserRole] = useState(null);
+  const [accessState, setAccessState] = useState('checking'); // 'checking' | 'allowed' | 'denied'
   useEffect(() => {
     if (!session) {
       setUserRole(null);
+      setAccessState('checking');
       return;
     }
     let cancelled = false;
-    supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        // Se não achar o perfil por algum motivo, assume viewer (mais seguro que liberar edição).
-        setUserRole(error ? 'viewer' : data?.role || 'viewer');
-      });
+    supabase.rpc('ensure_profile').then(({ data, error }) => {
+      if (cancelled) return;
+      if (error || !data) {
+        setUserRole(null);
+        setAccessState('denied');
+        return;
+      }
+      setUserRole(data === 'editor' ? 'editor' : 'viewer');
+      setAccessState('allowed');
+    });
     return () => {
       cancelled = true;
     };
   }, [session]);
   const isEditor = userRole === 'editor';
 
-  async function handleLogin(ev) {
-    ev.preventDefault();
+  // Login principal: conta Microsoft da empresa (Entra ID), pelo provedor "azure" do Supabase.
+  // Quando dá certo, o navegador sai desta página pro login da Microsoft - por isso só desligamos
+  // o "Abrindo..." em caso de erro.
+  async function handleLoginMicrosoft() {
     setLoginError('');
     setLoginBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginEmail.trim(),
-      password: loginPassword,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: { scopes: 'email', redirectTo: window.location.origin },
     });
-    setLoginBusy(false);
     if (error) {
-      setLoginError('E-mail ou senha inválidos.');
-      return;
+      setLoginError('Não foi possível abrir o login da Microsoft. Tente novamente.');
+      setLoginBusy(false);
     }
-    setLoginPassword('');
   }
 
   async function handleLogout() {
@@ -177,8 +181,11 @@ export default function ControleContratosPage() {
   // Se a leitura falhar (sem internet, banco fora do ar, chave errada), NÃO existe mais fallback
   // com dados embutidos: mostramos uma tela de indisponibilidade (ver renderização mais abaixo)
   // e nenhum contrato/ação fica visível até uma nova tentativa funcionar.
+  // Espera accessState === 'allowed' de propósito: a leitura dos contratos exige perfil
+  // existente, e é ensure_profile() que garante/confirma esse perfil. Ler antes de ela responder
+  // daria erro em quem acabou de ser liberado (cairia na tela de indisponibilidade sem motivo).
   useEffect(() => {
-    if (!session) return;
+    if (!session || accessState !== 'allowed') return;
     let cancelled = false;
     async function initData() {
       try {
@@ -212,7 +219,7 @@ export default function ControleContratosPage() {
     return () => {
       cancelled = true;
     };
-  }, [session]);
+  }, [session, accessState]);
 
   // ---------- Fechar o menu "Trocar de empresa" ao clicar fora ----------
   // Nota: no Next.js o React delega os eventos a partir do próprio `document` (diferente do
@@ -649,7 +656,9 @@ export default function ControleContratosPage() {
     return 'status-' + (String(c.status).trim() || 'Ativo').replace(/[^A-Za-zÀ-ú]/g, '');
   }
 
-  if (session === undefined) {
+  // "Carregando..." de tela cheia: usado enquanto verificamos se já existe sessão salva e,
+  // depois, enquanto ensure_profile() não respondeu se a pessoa tem acesso liberado.
+  function telaCarregando() {
     return (
       <div className="loading-overlay" style={{ position: 'static', minHeight: '100vh' }}>
         <div className="loading-box">
@@ -660,49 +669,51 @@ export default function ControleContratosPage() {
     );
   }
 
+  if (session === undefined) {
+    return telaCarregando();
+  }
+
   if (!session) {
     return (
       <div className="login-screen">
-        <form className="login-card" onSubmit={handleLogin}>
+        <div className="login-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="login-logo" src={COMPANY_ICONS.agrobiotech} alt="Agrobiotech" />
           <h1>Controle de Contratos</h1>
-          <p className="login-subtitle">Entre com seu e-mail e senha para acessar.</p>
-          <label htmlFor="login-email">E-mail</label>
-          <input
-            id="login-email"
-            name="email"
-            type="email"
-            autoComplete="username"
-            required
-            value={loginEmail}
-            onChange={(ev) => setLoginEmail(ev.target.value)}
-          />
-          <label htmlFor="login-password">Senha</label>
-          <input
-            id="login-password"
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            required
-            value={loginPassword}
-            onChange={(ev) => setLoginPassword(ev.target.value)}
-          />
-          <label className="login-show-pass">
-            <input
-              type="checkbox"
-              checked={showPassword}
-              onChange={(ev) => setShowPassword(ev.target.checked)}
-            />
-            Mostrar senha
-          </label>
+          <p className="login-subtitle">Entre com a conta Microsoft da empresa para acessar.</p>
           {loginError && <div className="login-error">{loginError}</div>}
-          <button type="submit" disabled={loginBusy}>
-            {loginBusy ? 'Entrando...' : 'Entrar'}
+          <button type="button" disabled={loginBusy} onClick={handleLoginMicrosoft}>
+            {loginBusy ? 'Abrindo...' : 'Entrar com a conta Microsoft'}
           </button>
-        </form>
+        </div>
       </div>
     );
+  }
+
+  // Autenticou na Microsoft, mas não está na lista de pessoas liberadas (ensure_profile()
+  // devolveu nulo ou deu erro). Nada de contrato aparece: só o aviso e o botão de sair.
+  if (accessState === 'denied') {
+    return (
+      <div className="login-screen">
+        <div className="login-card">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="login-logo" src={COMPANY_ICONS.agrobiotech} alt="Agrobiotech" />
+          <h1>Acesso não liberado</h1>
+          <p className="login-subtitle">
+            Sua conta entrou, mas ainda não tem acesso liberado ao Controle de Contratos. Fale com
+            o setor de tecnologia para pedir a liberação.
+          </p>
+          {session.user?.email && <p className="login-account">{session.user.email}</p>}
+          <button type="button" onClick={handleLogout}>
+            Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === 'checking') {
+    return telaCarregando();
   }
 
   return (

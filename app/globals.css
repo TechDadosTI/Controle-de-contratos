@@ -220,27 +220,15 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
 .login-logo{height:48px;display:block;margin:0 auto 18px;}
 .login-card h1{font-size:18px;margin:0 0 6px;color:var(--navy-dark);}
 .login-subtitle{font-size:13px;color:var(--muted);margin:0 0 20px;}
-.login-card label{
-  display:block;text-align:left;font-size:11px;font-weight:bold;color:var(--muted);
-  margin:0 0 4px;text-transform:uppercase;letter-spacing:.02em;
-}
-.login-card input{
-  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;
-  font-size:14px;margin-bottom:14px;background:#fff;
-}
-.login-card label.login-show-pass{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  font-size:13px;color:var(--muted);margin:2px 0 18px;
-  text-align:center;text-transform:none;font-weight:normal;letter-spacing:normal;
-}
-.login-card label.login-show-pass input{
-  width:16px;height:16px;margin:0;padding:0;accent-color:var(--navy);
-}
 .login-error{
   background:var(--red-bg);color:var(--red-fg);border-radius:6px;padding:8px 10px;
   font-size:12.5px;margin-bottom:14px;text-align:left;
 }
+/* Botão "Entrar com a conta Microsoft" (e o "Sair" da tela de acesso não liberado). */
 .login-card button{width:100%;padding:11px;font-size:14px;}
+/* E-mail da conta que entrou, na tela de acesso não liberado: ajuda a pessoa a perceber que
+   entrou com a conta errada (pessoal em vez da conta da empresa, por exemplo). */
+.login-account{font-size:12.5px;color:var(--muted);margin:0 0 18px;word-break:break-all;}
 
 .offline-banner{
   background:#FDECEA;border-bottom:1px solid #F5C6CB;color:#7A1F1F;
