@@ -202,12 +202,42 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
 .sync-status.saving{background:#FFD966;color:#5c4600;}
 .sync-status.error{background:#E5484D;color:#fff;}
 
-.logout-btn{
-  position:absolute;top:20px;right:74px;border:none;
+/* Menu da conta no canto do cabeçalho, no mesmo padrão do Microsoft 365: um avatar redondo
+   com as iniciais que abre um cartão com organização, nome, e-mail, papel e o botão Sair.
+   Substituiu o antigo botão "Sair" escrito por extenso. */
+.account-wrap{position:absolute;top:20px;right:74px;z-index:21;}
+.account-btn{
+  width:40px;height:40px;border-radius:50%;padding:0;
   background:var(--header-btn-bg, rgba(255,255,255,.14));color:var(--header-btn-color, #fff);
-  height:40px;border-radius:8px;font-size:13px;padding:0 14px;
+  font-size:13.5px;letter-spacing:.02em;
+  display:flex;align-items:center;justify-content:center;
 }
-.logout-btn:hover{background:var(--header-btn-bg-hover, rgba(255,255,255,.26));opacity:1;}
+.account-btn:hover{background:var(--header-btn-bg-hover, rgba(255,255,255,.26));opacity:1;}
+.account-menu{
+  display:none;position:absolute;top:50px;right:0;background:#fff;border-radius:14px;
+  border:1px solid rgba(10,30,20,.08);box-shadow:0 16px 40px rgba(10,30,20,.22);
+  width:290px;overflow:hidden;text-align:left;
+}
+.account-menu.open{display:block;animation:cmFadeIn .12s ease-out;}
+.account-menu .am-org{
+  padding:12px 16px;font-size:10.5px;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);border-bottom:1px solid var(--border);
+}
+.account-menu .am-id{display:flex;gap:12px;align-items:center;padding:16px;}
+.account-menu .am-avatar{
+  flex:none;width:44px;height:44px;border-radius:50%;
+  background:var(--accent, var(--navy));color:var(--accent-text, #fff);
+  font-size:15px;font-weight:bold;display:flex;align-items:center;justify-content:center;
+}
+.account-menu .am-id-txt{min-width:0;}
+.account-menu .am-name{margin:0;font-size:14px;font-weight:bold;color:var(--text);}
+.account-menu .am-email{margin:2px 0 0;font-size:12px;color:var(--muted);word-break:break-all;}
+.account-menu .am-action{
+  display:block;width:100%;text-align:left;border-radius:0;
+  background:#fff;color:var(--text);border-top:1px solid var(--border);
+  padding:12px 16px;font-size:13.5px;font-weight:500;
+}
+.account-menu .am-action:hover{background:var(--mint);opacity:1;}
 
 .login-screen{
   min-height:100vh;display:flex;align-items:center;justify-content:center;
@@ -226,6 +256,7 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
 }
 /* Botão "Entrar com a conta Microsoft" (e o "Sair" da tela de acesso não liberado). */
 .login-card button{width:100%;padding:11px;font-size:14px;}
+.login-card button + button{margin-top:10px;}
 /* E-mail da conta que entrou, na tela de acesso não liberado: ajuda a pessoa a perceber que
    entrou com a conta errada (pessoal em vez da conta da empresa, por exemplo). */
 .login-account{font-size:12.5px;color:var(--muted);margin:0 0 18px;word-break:break-all;}
@@ -304,7 +335,9 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
   .company-menu-btn, .header-help-btn{width:36px;height:36px;font-size:16px;top:10px;}
   .company-menu-btn{left:10px;}
   .header-help-btn{right:10px;}
-  .logout-btn{top:10px;right:52px;height:36px;font-size:11px;padding:0 10px;}
+  .account-wrap{top:10px;right:52px;}
+  .account-btn{width:36px;height:36px;font-size:12px;}
+  .account-menu{width:calc(100vw - 72px);max-width:290px;}
   .company-menu{left:10px;top:54px;min-width:0;width:calc(100vw - 20px);}
   .sync-status{display:block;margin:8px auto 0;width:fit-content;}
 

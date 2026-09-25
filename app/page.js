@@ -37,6 +37,10 @@ const EMPTY_FORM = FIELDS.reduce((acc, f) => {
   return acc;
 }, {});
 
+// Organização mostrada no topo do menu da conta, igual ao menu de conta do Microsoft 365.
+// É o tenant com que a pessoa fez login - não muda conforme a empresa selecionada na tela.
+const ORG_LABEL = 'Agrobiotech Agronegócio Ltda';
+
 export default function ControleContratosPage() {
   // ---------- Dados: por empresa. Começa vazio de propósito - só é preenchido depois de login
   // válido e leitura bem-sucedida do Supabase (ver initData()). Não existe mais fallback local
@@ -68,6 +72,27 @@ export default function ControleContratosPage() {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
+  }, []);
+
+  // Erro na volta do login da Microsoft: sem isto a pessoa simplesmente reaparece na tela de
+  // login, sem nenhuma explicação, e fica tentando de novo achando que não clicou direito
+  // (aconteceu em 2026-09-25). O Supabase/Entra devolve o motivo ora na query (?error=...),
+  // ora no fragmento (#error=...), então olhamos os dois.
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const codigo = query.get('error_code') || query.get('error') || hash.get('error_code') || hash.get('error');
+    if (!codigo) return;
+    const descricao = (query.get('error_description') || hash.get('error_description') || '').replace(/\+/g, ' ');
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a URL de retorno é um sistema externo: só dá para lê-la depois da montagem
+    setLoginError(
+      'Não foi possível concluir o login. Tente entrar novamente; se continuar assim, avise o ' +
+        'setor de tecnologia com esta mensagem: ' +
+        codigo +
+        (descricao ? ' - ' + descricao : '')
+    );
+    // Tira os parâmetros da barra de endereço para o aviso não voltar a cada F5.
+    window.history.replaceState({}, '', window.location.pathname);
   }, []);
 
   // ---------- Papel do usuário: 'editor' (pode tudo) ou 'viewer' (só vê e exporta) ----------
@@ -118,6 +143,7 @@ export default function ControleContratosPage() {
   }
 
   async function handleLogout() {
+    setAccountMenuOpen(false);
     await supabase.auth.signOut();
     // Limpa os contratos da tela/memória ao sair, em vez de deixá-los na interface até o
     // próximo carregamento (defesa em profundidade - a tela de login já cobre a UI principal).
@@ -132,6 +158,25 @@ export default function ControleContratosPage() {
     setLoading(true);
   }
 
+  // Volta para o login da Microsoft já pedindo a escolha da conta (prompt=select_account).
+  // Sem esse parâmetro a Microsoft reaproveita a conta que já está no navegador e a pessoa cai
+  // de novo no mesmo lugar - justamente o caso de quem entrou com a conta errada (pessoal em vez
+  // da corporativa) e parou na tela de acesso não liberado.
+  async function handleSwitchAccount() {
+    await handleLogout();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: {
+        scopes: 'email',
+        redirectTo: window.location.origin,
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error) {
+      setLoginError('Não foi possível abrir o login da Microsoft. Tente novamente.');
+    }
+  }
+
   const [activeCard, setActiveCard] = useState('');
   const [search, setSearch] = useState('');
   const [fStatus, setFStatus] = useState('');
@@ -140,6 +185,30 @@ export default function ControleContratosPage() {
 
   const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
   const companyMenuRef = useRef(null);
+
+  // ---------- Menu da conta (avatar com iniciais, no padrão do Microsoft 365) ----------
+  // O nome vem do Entra ID em user_metadata; a chave varia conforme o provedor, então tentamos
+  // as duas usadas pelo provider "azure" e, se nenhuma vier, montamos a partir do e-mail
+  // ("carina.sousa@..." -> "Carina Sousa") para nunca mostrar um avatar vazio.
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  const accountEmail = session?.user?.email || '';
+  const accountName =
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.user_metadata?.name ||
+    accountEmail
+      .split('@')[0]
+      .replace(/[._-]+/g, ' ')
+      .replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1)) ||
+    'Minha conta';
+  // Primeira letra do primeiro e do último nome ("Renan Argentato de Oliveira" -> "RO").
+  const accountInitials = (() => {
+    const parts = accountName.split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    const first = parts[0].charAt(0);
+    const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+    return (first + last).toUpperCase();
+  })();
 
   // ---------- Barra lateral de empresas (só no computador; no celular/tablet continua o ☰) ----------
   // O valor salvo é lido dentro do useEffect, não durante o render: no primeiro render o
@@ -232,6 +301,10 @@ export default function ControleContratosPage() {
       if (ev.target.closest('.company-menu-btn')) return;
       if (companyMenuRef.current && !companyMenuRef.current.contains(ev.target)) {
         setCompanyMenuOpen(false);
+      }
+      // O botão do avatar já alterna sozinho no onClick, então ignoramos cliques dentro dele.
+      if (!ev.target.closest('.account-wrap')) {
+        setAccountMenuOpen(false);
       }
     }
     document.addEventListener('click', onDocClick);
@@ -704,7 +777,10 @@ export default function ControleContratosPage() {
             o setor de tecnologia para pedir a liberação.
           </p>
           {session.user?.email && <p className="login-account">{session.user.email}</p>}
-          <button type="button" onClick={handleLogout}>
+          <button type="button" onClick={handleSwitchAccount}>
+            Escolher outra conta
+          </button>
+          <button type="button" className="secondary" onClick={handleLogout}>
             Sair
           </button>
         </div>
@@ -771,9 +847,31 @@ export default function ControleContratosPage() {
         </div>
         <p className="tagline">Controle de Contratos</p>
         <p className="company-badge">{COMPANIES[activeCompany].label}</p>
-        <button type="button" className="logout-btn" title="Sair do sistema" onClick={handleLogout}>
-          Sair
-        </button>
+        <div className="account-wrap" ref={accountMenuRef}>
+          <button
+            type="button"
+            className="account-btn"
+            title={accountName + ' - clique para ver as opções da conta'}
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+            onClick={() => setAccountMenuOpen((v) => !v)}
+          >
+            {accountInitials}
+          </button>
+          <div className={'account-menu' + (accountMenuOpen ? ' open' : '')} role="menu">
+            <div className="am-org">{ORG_LABEL}</div>
+            <div className="am-id">
+              <span className="am-avatar">{accountInitials}</span>
+              <div className="am-id-txt">
+                <p className="am-name">{accountName}</p>
+                <p className="am-email">{accountEmail}</p>
+              </div>
+            </div>
+            <button type="button" className="am-action" role="menuitem" onClick={handleLogout}>
+              Sair
+            </button>
+          </div>
+        </div>
         {syncStatus === 'saving' || syncStatus === 'error' || syncStatus === 'offline' ? (
           <span
             className={
