@@ -7,6 +7,7 @@ import {
   COMPANY_ORDER,
   COMPANY_REPS,
   ALL_COMPANY_KEYS,
+  RAZOES_SOCIAIS,
   COMPANY_ICONS,
   COMPANY_HEADER_LOGOS,
   COMPANY_HEADER_THEME,
@@ -25,6 +26,8 @@ import {
   fmtValor,
   fmtDate,
   parseDate,
+  calcularTermino,
+  calcularPrazo,
   parseValorNum,
   rowToContract,
   dataToRow,
@@ -32,6 +35,7 @@ import {
   uniqueValsAllCompanies,
   rowsToContracts,
   parseCSV,
+  ordenarContratos,
 } from '@/lib/contracts';
 
 const EMPTY_FORM = FIELDS.reduce((acc, f) => {
@@ -42,6 +46,34 @@ const EMPTY_FORM = FIELDS.reduce((acc, f) => {
 // Organização mostrada no topo do menu da conta, igual ao menu de conta do Microsoft 365.
 // É o tenant com que a pessoa fez login - não muda conforme a empresa selecionada na tela.
 const ORG_LABEL = 'Agrobiotech Agronegócio Ltda';
+
+// Colunas da tabela: [campo usado para ordenar (null = coluna não ordena), título, explicação].
+// Hoje só a Empresa Contratada ordena, a pedido - as demais têm campo null. Para liberar outra
+// coluna basta trocar o null pelo nome do campo do contrato; a ordenação em si
+// (ordenarContratos, em lib/contracts.js) já trata texto, número e data.
+const COLUNAS_TABELA = [
+  ['empresaContratada', 'Empresa Contratada', 'Nome da empresa com quem o contrato foi feito'],
+  [null, 'Centro de Custo', 'Código do setor responsável pelo custo'],
+  [null, 'Responsável', 'Quem cuida deste contrato dentro da empresa'],
+  [null, 'Objeto do Contrato', 'O que esse contrato cobre / para que serve'],
+  [null, 'Valor', 'Quanto custa o contrato'],
+  [null, 'Data de Término', 'Data em que o contrato acaba'],
+  [null, 'Prazo de Vigência', 'Por quanto tempo o contrato vale'],
+  [null, 'Pagamento', 'Com que frequência se paga (mensal, anual...)'],
+  [
+    null,
+    'Aviso de Rescisão',
+    'Com quantos dias de antecedência é preciso avisar se quiser cancelar',
+  ],
+  [null, 'Status', 'Se o contrato está em uso (Ativo) ou não (Inativo)'],
+  [null, 'Assinado', 'Se o contrato já foi assinado pelas partes'],
+  [null, 'Categoria', 'Em qual grupo este contrato está organizado'],
+  [
+    null,
+    'Alerta',
+    'Aviso automático sobre o vencimento deste contrato. Cores: Verde = tudo certo · Amarelo = vence em breve · Laranja = avisar rescisão · Vermelho = já venceu · Cinza = encerrado ou sem data',
+  ],
+];
 
 export default function ControleContratosPage() {
   // ---------- Dados: por empresa. Começa vazio de propósito - só é preenchido depois de login
@@ -344,13 +376,115 @@ export default function ControleContratosPage() {
     return opts;
   }, [contracts, companyStore]);
 
+  // ---------- Centro de custo puxa o responsável ----------
+  // Vínculo aprendido do histórico: para cada centro de custo, o responsável que mais aparece
+  // nos contratos já cadastrados. Empate é decidido pelo mais recente (maior id), que costuma
+  // ser a informação mais atual. Olha TODAS as listas pelo mesmo motivo que as sugestões desses
+  // dois campos já olham (ver SUGGESTED_FIELDS_GLOBAL em lib/contracts.js): Pilar e Tarpon nunca
+  // preencheram esses campos na planilha original, então quase tudo vem da Agrobiotech.
+  const responsavelPorCentroCusto = useMemo(() => {
+    const contagem = {};
+    ALL_COMPANY_KEYS.forEach((k) => {
+      (companyStore[k] || []).forEach((c) => {
+        const cc = String(c.centroCusto || '').trim();
+        const resp = String(c.responsavel || '').trim();
+        if (!cc || !resp) return;
+        if (!contagem[cc]) contagem[cc] = {};
+        const atual = contagem[cc][resp] || { vezes: 0, ultimoId: 0 };
+        contagem[cc][resp] = {
+          vezes: atual.vezes + 1,
+          ultimoId: Math.max(atual.ultimoId, Number(c.id) || 0),
+        };
+      });
+    });
+    const mapa = {};
+    Object.entries(contagem).forEach(([cc, porResponsavel]) => {
+      const melhor = Object.entries(porResponsavel).sort(
+        (a, b) => b[1].vezes - a[1].vezes || b[1].ultimoId - a[1].ultimoId
+      )[0];
+      if (melhor) mapa[cc] = melhor[0];
+    });
+    return mapa;
+  }, [companyStore]);
+
+  // Guarda se o responsável que está no formulário foi preenchido por nós. Só assim dá para
+  // trocá-lo quando a pessoa muda o centro de custo, sem NUNCA apagar um nome digitado à mão.
+  const [responsavelAuto, setResponsavelAuto] = useState(false);
+
+  // Trocar o centro de custo preenche o responsável correspondente. Se o novo centro de custo
+  // não tiver responsável conhecido, limpa o campo apenas quando o valor que estava lá era o
+  // nosso - deixar o nome do centro de custo anterior seria pior do que deixar em branco.
+  function setCentroCusto(valor) {
+    const sugerido = responsavelPorCentroCusto[String(valor).trim()] || '';
+    const digitadoPelaPessoa = String(formData.responsavel || '').trim() && !responsavelAuto;
+    if (digitadoPelaPessoa) {
+      setField('centroCusto', valor);
+      return;
+    }
+    setFormData((prev) => ({ ...prev, centroCusto: valor, responsavel: sugerido }));
+    setResponsavelAuto(Boolean(sugerido));
+  }
+
+  // ---------- Início, término e prazo se completam ----------
+  // Duas das três informações determinam a terceira. Guardamos quais foram preenchidas por nós
+  // para poder recalculá-las quando as outras mudarem - e para nunca reescrever o que a pessoa
+  // digitou. O cálculo em si está em lib/contracts.js (calcularTermino / calcularPrazo).
+  const [terminoAuto, setTerminoAuto] = useState(false);
+  const [vigenciaAuto, setVigenciaAuto] = useState(false);
+
+  function atualizarDatas(campo, valor) {
+    const dados = { ...formData, [campo]: valor };
+    // Mexeu no campo à mão: ele deixa de ser "nosso".
+    let termAuto = campo === 'dataTermino' ? false : terminoAuto;
+    let vigAuto = campo === 'prazoVigencia' ? false : vigenciaAuto;
+
+    const temInicio = Boolean(parseDate(dados.dataInicio));
+    const temVigencia = Boolean(String(dados.prazoVigencia || '').trim());
+    const temTermino = Boolean(String(dados.dataTermino || '').trim());
+
+    if (campo !== 'dataTermino' && temInicio && temVigencia && (!temTermino || termAuto)) {
+      // início + prazo -> término
+      const calculado = calcularTermino(dados.dataInicio, dados.prazoVigencia);
+      if (calculado || termAuto) {
+        // fmtDate deixa no padrão brasileiro (01/12/2027), igual ao que aparece no campo de
+        // início; "Indeterminado" passa intacto. Quem lê essa data usa parseDate, que entende
+        // tanto dd/mm/aaaa quanto aaaa-mm-dd, então isso não muda nada para o resto do sistema.
+        dados.dataTermino = calculado ? fmtDate(calculado) : '';
+        termAuto = Boolean(calculado);
+      }
+    } else if (campo !== 'prazoVigencia' && temInicio && temTermino && (!temVigencia || vigAuto)) {
+      // início + término -> prazo
+      const calculado = calcularPrazo(dados.dataInicio, dados.dataTermino);
+      if (calculado || vigAuto) {
+        dados.prazoVigencia = calculado;
+        vigAuto = Boolean(calculado);
+      }
+    }
+
+    setFormData(dados);
+    setTerminoAuto(termAuto);
+    setVigenciaAuto(vigAuto);
+  }
+
   function openNew() {
     setEditingId(null);
+    setResponsavelAuto(false);
+    setTerminoAuto(false);
+    setVigenciaAuto(false);
     const existingOrigem = uniqueVals(contracts, 'origem');
     const preferredDefault = existingOrigem.includes('Controle de Contratos')
       ? 'Controle de Contratos'
       : existingOrigem[0] || 'Controle de Contratos';
-    setFormData({ ...EMPTY_FORM, status: 'Ativo', assinado: 'Sim', origem: preferredDefault });
+    setFormData({
+      ...EMPTY_FORM,
+      status: 'Ativo',
+      assinado: 'Sim',
+      origem: preferredDefault,
+      // A contratante é quase sempre a própria empresa aberta no sistema (nas listas de
+      // representantes, a empresa dona da lista). Quem precisar de outra do grupo troca pela
+      // lista do campo.
+      empresaContratante: COMPANIES[activeCompany]?.razaoSocial || '',
+    });
     setFormOpen(true);
   }
   function openEdit(id) {
@@ -367,6 +501,9 @@ export default function ControleContratosPage() {
       }
     });
     setFormData(data);
+    setResponsavelAuto(false);
+    setTerminoAuto(false);
+    setVigenciaAuto(false);
     setFormOpen(true);
   }
   function setField(f, v) {
@@ -512,9 +649,22 @@ export default function ControleContratosPage() {
   const statusOptions = useMemo(() => uniqueVals(contracts, 'status'), [contracts]);
   const responsavelOptions = useMemo(() => uniqueVals(contracts, 'responsavel'), [contracts]);
 
+  // Ordenação da tabela. Campo vazio = ordem de cadastro, que é como a lista sempre foi.
+  const [ordem, setOrdem] = useState({ campo: '', dir: 'asc' });
+
+  // Clicar no cabeçalho percorre três estados: A-Z, Z-A e de volta à ordem de cadastro. Assim dá
+  // para desfazer a ordenação no mesmo lugar onde ela foi ligada.
+  function alternarOrdem(campo) {
+    setOrdem((prev) => {
+      if (prev.campo !== campo) return { campo, dir: 'asc' };
+      if (prev.dir === 'asc') return { campo, dir: 'desc' };
+      return { campo: '', dir: 'asc' };
+    });
+  }
+
   const filteredList = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return contracts.filter((c) => {
+    const filtrados = contracts.filter((c) => {
       if (
         activeCard === 'ATIVOS' &&
         !(c.origem !== 'Encerrados' && String(c.status).trim().toLowerCase() === 'ativo')
@@ -534,7 +684,8 @@ export default function ControleContratosPage() {
       }
       return true;
     });
-  }, [contracts, activeCard, fStatus, fResp, fAlerta, search]);
+    return ordenarContratos(filtrados, ordem.campo, ordem.dir);
+  }, [contracts, activeCard, fStatus, fResp, fAlerta, search, ordem]);
 
   // ---------- Exportar (.xlsx bonito, com cores e formatação via ExcelJS) ----------
   async function handleExport() {
@@ -1022,6 +1173,18 @@ export default function ControleContratosPage() {
             <option value="SEMDATA">Sem data definida</option>
           </select>
           <select
+            title="Ordenar a lista. No computador dá para clicar no título da coluna também."
+            value={ordem.campo ? ordem.campo + ':' + ordem.dir : ''}
+            onChange={(e) => {
+              const [campo, dir] = e.target.value.split(':');
+              setOrdem({ campo: campo || '', dir: dir || 'asc' });
+            }}
+          >
+            <option value="">Ordem de cadastro</option>
+            <option value="empresaContratada:asc">Empresa contratada (A-Z)</option>
+            <option value="empresaContratada:desc">Empresa contratada (Z-A)</option>
+          </select>
+          <select
             title="Mostrar só contratos deste responsável"
             value={fResp}
             onChange={(e) => setFResp(e.target.value)}
@@ -1068,23 +1231,25 @@ export default function ControleContratosPage() {
           <table>
             <thead>
               <tr>
-                <th title="Nome da empresa com quem o contrato foi feito">Empresa Contratada</th>
-                <th title="Código do setor responsável pelo custo">Centro de Custo</th>
-                <th title="Quem cuida deste contrato dentro da empresa">Responsável</th>
-                <th title="O que esse contrato cobre / para que serve">Objeto do Contrato</th>
-                <th title="Quanto custa o contrato">Valor</th>
-                <th title="Data em que o contrato acaba">Data de Término</th>
-                <th title="Por quanto tempo o contrato vale">Prazo de Vigência</th>
-                <th title="Com que frequência se paga (mensal, anual...)">Pagamento</th>
-                <th title="Com quantos dias de antecedência é preciso avisar se quiser cancelar">
-                  Aviso de Rescisão
-                </th>
-                <th title="Se o contrato está em uso (Ativo) ou não (Inativo)">Status</th>
-                <th title="Se o contrato já foi assinado pelas partes">Assinado</th>
-                <th title="Em qual grupo este contrato está organizado">Categoria</th>
-                <th title="Aviso automático sobre o vencimento deste contrato. Cores: Verde = tudo certo · Amarelo = vence em breve · Laranja = avisar rescisão · Vermelho = já venceu · Cinza = encerrado ou sem data">
-                  Alerta
-                </th>
+                {COLUNAS_TABELA.map(([campo, titulo, dica]) => {
+                  const ativa = Boolean(campo) && ordem.campo === campo;
+                  return (
+                    <th
+                      key={titulo}
+                      title={campo ? dica + ' — clique para ordenar' : dica}
+                      className={campo ? 'ordenavel' + (ativa ? ' ordenada' : '') : undefined}
+                      aria-sort={ativa ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      onClick={campo ? () => alternarOrdem(campo) : undefined}
+                    >
+                      {titulo}
+                      {campo && (
+                        <span className="th-seta" aria-hidden="true">
+                          {ativa ? (ordem.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        </span>
+                      )}
+                    </th>
+                  );
+                })}
                 {isEditor && <th title="Botões para corrigir ou remover este contrato">Ações</th>}
               </tr>
             </thead>
@@ -1168,10 +1333,24 @@ export default function ControleContratosPage() {
           <div className="form-grid">
             <div>
               <label>Empresa Contratante</label>
+              {/* Lista fixa das razões sociais do grupo - diferente das outras sugestões do
+                  formulário, que saem dos contratos já cadastrados. A Empresa Contratada segue
+                  sem lista de propósito: ela é sempre alguém de fora, nunca se repete o bastante
+                  para valer uma sugestão. */}
               <input
+                list="empresaContratanteOpts"
+                autoComplete="off"
                 value={formData.empresaContratante || ''}
                 onChange={(e) => setField('empresaContratante', e.target.value)}
               />
+              <datalist id="empresaContratanteOpts">
+                {RAZOES_SOCIAIS.map((v) => (
+                  <option key={v} value={v} />
+                ))}
+              </datalist>
+              <div className="field-hint">
+                Preenchida com a empresa aberta no sistema. Dá para trocar por outra do grupo.
+              </div>
             </div>
             <div>
               <label>Empresa Contratada *</label>
@@ -1180,14 +1359,14 @@ export default function ControleContratosPage() {
                 onChange={(e) => setField('empresaContratada', e.target.value)}
               />
             </div>
-            {/* Empresa Contratante/Contratada: sem datalist de propósito - ver histórico do projeto */}
+
             <div>
               <label>Centro de Custo</label>
               <input
                 list="centroCustoOpts"
                 autoComplete="off"
                 value={formData.centroCusto || ''}
-                onChange={(e) => setField('centroCusto', e.target.value)}
+                onChange={(e) => setCentroCusto(e.target.value)}
               />
               <datalist id="centroCustoOpts">
                 {(suggestedOptions.centroCustoOpts || []).map((v) => (
@@ -1202,14 +1381,21 @@ export default function ControleContratosPage() {
                 list="responsavelOpts"
                 autoComplete="off"
                 value={formData.responsavel || ''}
-                onChange={(e) => setField('responsavel', e.target.value)}
+                onChange={(e) => {
+                  setField('responsavel', e.target.value);
+                  setResponsavelAuto(false);
+                }}
               />
               <datalist id="responsavelOpts">
                 {(suggestedOptions.responsavelOpts || []).map((v) => (
                   <option key={v} value={v} />
                 ))}
               </datalist>
-              <div className="field-hint">Pode digitar um novo, ou escolher um já usado nesta empresa.</div>
+              <div className="field-hint">
+                {responsavelAuto
+                  ? 'Preenchido pelo centro de custo. Pode trocar se não for essa pessoa.'
+                  : 'Pode digitar um novo, ou escolher um já usado nesta empresa.'}
+              </div>
             </div>
             <div className="full">
               <label>Objeto do Contrato</label>
@@ -1262,17 +1448,17 @@ export default function ControleContratosPage() {
               <input
                 type="date"
                 value={formData.dataInicio || ''}
-                onChange={(e) => setField('dataInicio', e.target.value)}
+                onChange={(e) => atualizarDatas('dataInicio', e.target.value)}
               />
             </div>
             <div>
               <label>Data de Término</label>
               <input
                 list="dataTerminoOpts"
-                placeholder="AAAA-MM-DD ou Indeterminado"
+                placeholder="dd/mm/aaaa ou Indeterminado"
                 autoComplete="off"
                 value={formData.dataTermino || ''}
-                onChange={(e) => setField('dataTermino', e.target.value)}
+                onChange={(e) => atualizarDatas('dataTermino', e.target.value)}
               />
               <datalist id="dataTerminoOpts">
                 {(suggestedOptions.dataTerminoOpts || []).map((v) => (
@@ -1280,7 +1466,9 @@ export default function ControleContratosPage() {
                 ))}
               </datalist>
               <div className="field-hint">
-                Pode digitar uma data nova, ou escolher &quot;Indeterminado&quot;/outro valor já usado.
+                {terminoAuto
+                  ? 'Calculado pelo início e pelo prazo de vigência. Pode corrigir.'
+                  : 'Pode digitar uma data nova, ou escolher "Indeterminado"/outro valor já usado.'}
               </div>
             </div>
             <div>
@@ -1290,14 +1478,18 @@ export default function ControleContratosPage() {
                 placeholder="Ex: 12 meses"
                 autoComplete="off"
                 value={formData.prazoVigencia || ''}
-                onChange={(e) => setField('prazoVigencia', e.target.value)}
+                onChange={(e) => atualizarDatas('prazoVigencia', e.target.value)}
               />
               <datalist id="prazoVigenciaOpts">
                 {(suggestedOptions.prazoVigenciaOpts || []).map((v) => (
                   <option key={v} value={v} />
                 ))}
               </datalist>
-              <div className="field-hint">Pode digitar um novo, ou escolher um já usado nesta empresa.</div>
+              <div className="field-hint">
+                {vigenciaAuto
+                  ? 'Calculado pelas datas de início e término. Pode corrigir.'
+                  : 'Pode digitar um novo, ou escolher um já usado nesta empresa.'}
+              </div>
             </div>
             <div>
               <label>Prazo p/ Aviso de Rescisão</label>

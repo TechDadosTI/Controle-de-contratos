@@ -441,3 +441,11 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
   background:var(--accent-tint, #F0F8F4);color:var(--accent-dark, #005D2B);
   display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:bold;
 }
+
+/* Cabeçalho da tabela que ordena ao ser clicado. A seta fica apagada até a coluna estar em uso.
+   No celular o thead inteiro some (ver media query acima), e por isso a mesma ordenação também
+   está no seletor da barra de filtros. */
+thead th.ordenavel{cursor:pointer;user-select:none;}
+thead th.ordenavel:hover{filter:brightness(1.08);}
+.th-seta{margin-left:5px;font-size:10px;opacity:.5;}
+thead th.ordenada .th-seta{opacity:1;}
