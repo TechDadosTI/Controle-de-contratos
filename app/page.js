@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabaseClient';
 import {
   COMPANIES,
   COMPANY_ORDER,
+  COMPANY_REPS,
+  ALL_COMPANY_KEYS,
   COMPANY_ICONS,
   COMPANY_HEADER_LOGOS,
   COMPANY_HEADER_THEME,
@@ -265,7 +267,7 @@ export default function ControleContratosPage() {
         if (error) throw error;
         if (cancelled) return;
         const byCompany = {};
-        COMPANY_ORDER.forEach((k) => {
+        ALL_COMPANY_KEYS.forEach((k) => {
           byCompany[k] = [];
         });
         data.forEach((row) => {
@@ -337,7 +339,7 @@ export default function ControleContratosPage() {
       opts[listId] = uniqueVals(contracts, key);
     });
     SUGGESTED_FIELDS_GLOBAL.forEach(([key, listId]) => {
-      opts[listId] = uniqueValsAllCompanies(companyStore, COMPANY_ORDER, key);
+      opts[listId] = uniqueValsAllCompanies(companyStore, ALL_COMPANY_KEYS, key);
     });
     return opts;
   }, [contracts, companyStore]);
@@ -819,16 +821,30 @@ export default function ControleContratosPage() {
           <div className="cm-title">Trocar de empresa</div>
           <div className="cm-list">
             {COMPANY_ORDER.map((k) => {
+              const repKey = COMPANY_REPS[k];
               const isActive = k === activeCompany;
+              const repAtivo = activeCompany === repKey;
               return (
-                <button key={k} className={isActive ? 'active' : ''} onClick={() => switchCompany(k)}>
-                  <span className="cm-avatar">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={COMPANY_ICONS[k]} alt={COMPANIES[k].label} />
-                  </span>
-                  <span className="cm-name">{COMPANIES[k].label}</span>
-                  {isActive && <span className="cm-check">&#10003;</span>}
-                </button>
+                <div key={k} className="cm-group">
+                  <button className={isActive ? 'active' : ''} onClick={() => switchCompany(k)}>
+                    <span className="cm-avatar">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={COMPANY_ICONS[k]} alt={COMPANIES[k].label} />
+                    </span>
+                    <span className="cm-name">{COMPANIES[k].label}</span>
+                    {isActive && <span className="cm-check">&#10003;</span>}
+                  </button>
+                  {repKey && (isActive || repAtivo) && (
+                    <button
+                      className={'cm-sub' + (repAtivo ? ' active' : '')}
+                      onClick={() => switchCompany(repKey)}
+                    >
+                      <span className="cm-sub-mark">R</span>
+                      <span className="cm-name">Representantes</span>
+                      {repAtivo && <span className="cm-check">&#10003;</span>}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -898,21 +914,39 @@ export default function ControleContratosPage() {
             </button>
           </div>
           <div className="cs-list">
-            {COMPANY_ORDER.map((k) => (
-              <button
-                key={k}
-                type="button"
-                className={k === activeCompany ? 'active' : ''}
-                onClick={() => switchCompany(k)}
-                title={COMPANIES[k].label}
-              >
-                <span className="cs-avatar">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={COMPANY_ICONS[k]} alt={COMPANIES[k].label} />
-                </span>
-                <span className="cs-name">{COMPANIES[k].label}</span>
-              </button>
-            ))}
+            {COMPANY_ORDER.map((k) => {
+              const repKey = COMPANY_REPS[k];
+              // A lista de representantes só aparece quando o grupo daquela empresa está
+              // selecionado, para a barra não virar uma lista de 17 itens.
+              const grupoAtivo = activeCompany === k || activeCompany === repKey;
+              return (
+                <div key={k} className="cs-group">
+                  <button
+                    type="button"
+                    className={k === activeCompany ? 'active' : ''}
+                    onClick={() => switchCompany(k)}
+                    title={COMPANIES[k].label}
+                  >
+                    <span className="cs-avatar">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={COMPANY_ICONS[k]} alt={COMPANIES[k].label} />
+                    </span>
+                    <span className="cs-name">{COMPANIES[k].label}</span>
+                  </button>
+                  {repKey && grupoAtivo && (
+                    <button
+                      type="button"
+                      className={'cs-sub' + (activeCompany === repKey ? ' active' : '')}
+                      onClick={() => switchCompany(repKey)}
+                      title={COMPANIES[repKey].label}
+                    >
+                      <span className="cs-sub-mark">R</span>
+                      <span className="cs-name">Representantes</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </aside>
         <div className="app-content">
