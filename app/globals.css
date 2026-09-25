@@ -411,3 +411,41 @@ footer{padding:16px 28px;color:var(--muted);font-size:11.5px;}
 .company-sidebar.collapsed .cs-name{display:none;}
 @media (min-width:1025px){ .company-menu-btn{display:none;} }
 @media (max-width:1024px){ .company-sidebar{display:none;} }
+
+/* ---------- Listas de representantes ---------- */
+/* Item recuado, logo abaixo da empresa dona, ligado a ela por um filete vertical. Só aparece
+   quando o grupo daquela empresa está selecionado (ver COMPANY_REPS em lib/companies.js). */
+.cs-group{display:block;}
+.company-sidebar .cs-list .cs-sub{padding-left:28px;font-size:12.5px;position:relative;}
+.company-sidebar .cs-list .cs-sub::before{
+  content:'';position:absolute;left:16px;top:8px;bottom:8px;width:2px;
+  background:var(--accent, #008D44);opacity:.35;border-radius:2px;
+}
+.cs-sub-mark{
+  flex:none;width:22px;height:22px;border-radius:50%;
+  background:var(--accent-tint, #F0F8F4);color:var(--accent-dark, #005D2B);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;
+}
+.company-sidebar.collapsed .cs-sub{padding-left:0;justify-content:center;}
+.company-sidebar.collapsed .cs-sub::before{display:none;}
+
+/* Mesma ideia no menu suspenso do celular, seguindo o padrão de lá (avatar redondo + nome). */
+.cm-group{display:block;}
+.company-menu .cm-list .cm-sub{padding-left:26px;font-size:13px;position:relative;}
+.company-menu .cm-list .cm-sub::before{
+  content:'';position:absolute;left:17px;top:9px;bottom:9px;width:2px;
+  background:var(--accent, #008D44);opacity:.35;border-radius:2px;
+}
+.cm-sub-mark{
+  flex:none;width:24px;height:24px;border-radius:50%;
+  background:var(--accent-tint, #F0F8F4);color:var(--accent-dark, #005D2B);
+  display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:bold;
+}
+
+/* Cabeçalho da tabela que ordena ao ser clicado. A seta fica apagada até a coluna estar em uso.
+   No celular o thead inteiro some (ver media query acima), e por isso a mesma ordenação também
+   está no seletor da barra de filtros. */
+thead th.ordenavel{cursor:pointer;user-select:none;}
+thead th.ordenavel:hover{filter:brightness(1.08);}
+.th-seta{margin-left:5px;font-size:10px;opacity:.5;}
+thead th.ordenada .th-seta{opacity:1;}
